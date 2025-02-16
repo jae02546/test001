@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>駅名検索</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+    }
+    h1 {
+      font-size: 1.2em;
+      margin-bottom: 10px;
+    }
+    .search-area {
+      margin-bottom: 20px;
+    }
+    .search-area label {
+      margin-right: 10px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 1200px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px 8px;
+    }
+    th {
+      background-color: #f0f0f0;
+    }
+    .wikipedia-links a {
+      margin-right: 6px;
+    }
+  </style>
+</head>
+<body>
+  <h1>駅名検索</h1>
+  <div class="search-area">
+    <!-- 検索文字列 -->
+    <input type="text" id="searchString" placeholder="検索文字列" />
+
+    <!-- 検索ボタン -->
+    <button onclick="searchStations()">検索</button>
+
+    <br><br>
+
+    <!-- 検索方法(部分一致/前方一致/後方一致/完全一致) -->
+    <label><input type="radio" name="searchMode" value="partial" checked>部分一致</label>
+    <label><input type="radio" name="searchMode" value="prefix">前方一致</label>
+    <label><input type="radio" name="searchMode" value="suffix">後方一致</label>
+    <label><input type="radio" name="searchMode" value="exact">完全一致</label>
+
+    <br><br>
+
+    <!-- 検索対象(駅名/かな) -->
+    <label><input type="radio" name="searchTarget" value="name" checked>駅名</label>
+    <label><input type="radio" name="searchTarget" value="kana">かな</label>
+  </div>
+
+  <!-- 結果表示テーブル -->
+  <table id="resultTable">
+    <thead>
+      <tr>
+        <th>駅名</th>
+        <th>かな</th>
+        <th>都道府県</th>
+        <th>路線名</th>
+        <th>Wikipedia</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- 検索結果がここに挿入される -->
+    </tbody>
+  </table>
+
+  <script>
+    // すべての駅情報をまとめるためのマップ
+    // key: "駅名|かな|都道府県", value: { name, kana, pref, lines: [{ lineName, lineUrl }], stationUrl }
+    let stationMap = {};
+
+    // ページ読み込み時に sta.json を取得してマップを作成
+    window.addEventListener('load', () => {
+      fetch('sta.json')
+        .then(response => response.json())
+        .then(data => {
+          buildStationMap(data);
+        })
+        .catch(err => {
+          console.error('JSONの読み込みに失敗しました:', err);
+        });
+    });
+
+    /**
+     * sta.json の内容を元に stationMap を作成する
+     * @param {Array} jsonData sta.jsonの配列データ(路線ごと)
+     */
+    function buildStationMap(jsonData) {
+      stationMap = {}; // 初期化
+
+      // 各路線データを走査
+      jsonData.forEach(lineObj => {
+        const lineName = lineObj.name;     // 路線名
+        const lineUrl  = lineObj.url;      // 路線のWikipediaリンク
+        const stationList = lineObj.qiList; // 駅の配列
+
+        stationList.forEach(st => {
+          const stationName = st.name;
+          const stationKana = st.kana;
+          const stationPref = st.info3;  // 都道府県
+          const stationUrl  = st.url;    // 駅のWikipediaリンク
+
+          // 同一駅かどうか判断するためのキー
+          const key = stationName + '|' + stationKana + '|' + stationPref;
+
+          if (!stationMap[key]) {
+            stationMap[key] = {
+              name: stationName,
+              kana: stationKana,
+              pref: stationPref,
+              // 複数路線がある場合を考慮して配列で保持
+              lines: [],
+              // 駅自体のURLも一応配列にしておく(駅が同じならURLは同じ想定)
+              stationUrl: stationUrl
+            };
+          }
+          // 路線情報を追加
+          stationMap[key].lines.push({
+            lineName: lineName,
+            lineUrl: lineUrl
+          });
+        });
+      });
+    }
+
+    /**
+     * 検索ボタンクリック時に実行
+     */
+    function searchStations() {
+      const searchString = document.getElementById('searchString').value.trim();
+      const searchMode = document.querySelector('input[name="searchMode"]:checked').value;
+      const searchTarget = document.querySelector('input[name="searchTarget"]:checked').value;
+
+      // 検索結果をフィルタリング
+      const results = Object.values(stationMap).filter(station => {
+        // 検索対象文字列
+        let targetValue = station.name; // デフォルト駅名
+        if (searchTarget === 'kana') {
+          targetValue = station.kana;
+        }
+
+        return matchString(targetValue, searchString, searchMode);
+      });
+
+      // テーブルに結果を描画
+      renderTable(results);
+    }
+
+    /**
+     * 文字列検索の判定
+     * @param {string} targetValue   駅名またはかな
+     * @param {string} searchString  入力された検索文字列
+     * @param {string} searchMode    部分一致/前方一致/後方一致/完全一致
+     * @returns {boolean}            条件に合致するか
+     */
+    function matchString(targetValue, searchString, searchMode) {
+      // 空文字の場合は全件表示でも良いが、ここでは全件ヒットとする
+      if (!searchString) return true;
+
+      switch (searchMode) {
+        case 'partial': // 部分一致
+          return targetValue.includes(searchString);
+        case 'prefix':  // 前方一致
+          return targetValue.startsWith(searchString);
+        case 'suffix':  // 後方一致
+          return targetValue.endsWith(searchString);
+        case 'exact':   // 完全一致
+          return targetValue === searchString;
+        default:
+          return false;
+      }
+    }
+
+    /**
+     * 検索結果をテーブル表示
+     * @param {Array} results stationMapの要素の配列
+     */
+    function renderTable(results) {
+      const tbody = document.querySelector('#resultTable tbody');
+      tbody.innerHTML = ''; // 一旦クリア
+
+      results.forEach(station => {
+        const tr = document.createElement('tr');
+
+        // 駅名
+        const tdName = document.createElement('td');
+        tdName.textContent = station.name;
+        tr.appendChild(tdName);
+
+        // かな
+        const tdKana = document.createElement('td');
+        tdKana.textContent = station.kana;
+        tr.appendChild(tdKana);
+
+        // 都道府県
+        const tdPref = document.createElement('td');
+        tdPref.textContent = station.pref;
+        tr.appendChild(tdPref);
+
+        // 路線名(カンマ区切り)
+        const tdLines = document.createElement('td');
+        const lineNames = station.lines.map(l => l.lineName).join(', ');
+        tdLines.textContent = lineNames;
+        tr.appendChild(tdLines);
+
+        // Wikipediaリンク
+        const tdWiki = document.createElement('td');
+        tdWiki.classList.add('wikipedia-links');
+
+        // 駅のWikipediaリンク
+        const stationLink = document.createElement('a');
+        stationLink.href = station.stationUrl;
+        stationLink.target = '_blank';
+        stationLink.textContent = '駅: ' + station.name;
+        tdWiki.appendChild(stationLink);
+
+        // 路線ごとのWikipediaリンク
+        station.lines.forEach(l => {
+          const lineLink = document.createElement('a');
+          lineLink.href = l.lineUrl;
+          lineLink.target = '_blank';
+          lineLink.textContent = '路線: ' + l.lineName;
+          tdWiki.appendChild(lineLink);
+        });
+
+        tr.appendChild(tdWiki);
+
+        tbody.appendChild(tr);
+      });
+    }
+  </script>
+</body>
+</html>
