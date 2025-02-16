@@ -1,0 +1,87 @@
+<html lang="ja"> <head> <meta charset="UTF-8" /> <title>駅名検索サイト</title> <style> table { border-collapse: collapse; width: 100%; } th, td { border: 1px solid #ccc; padding: 8px; text-align: left; } th { background-color: #f2f2f2; } </style> </head> <body> <h1>駅名検索サイト</h1> <input type="text" id="searchBox" placeholder="駅名を入力" /> <button id="searchButton">検索</button> <br /><br /> <table id="resultsTable"> <thead> <tr> <th>駅名</th> <th>駅名（カナ）</th> <th>駅名wikiリンク</th> <th>路線名</th> <th>路線名（カナ）</th> <th>路線wikiリンク</th> </tr> </thead> <tbody></tbody> </table>
+
+
+    <script>
+        // sta.json のデータを保持する変数
+        let data = [];
+      
+        // sta.json を読み込む
+        fetch('sta.json')
+          .then((response) => response.json())
+          .then((json) => {
+            data = json;
+          })
+          .catch((error) => console.error('sta.json の読み込みエラー:', error));
+      
+        // 検索を実行する関数
+        function searchStations() {
+          const query = document.getElementById('searchBox').value.trim();
+          const resultsBody = document.querySelector('#resultsTable tbody');
+          resultsBody.innerHTML = ''; // 前回の検索結果をクリア
+      
+          if (!query) return;
+      
+          // 各路線の中の駅リスト（qiList）を検索
+          data.forEach((route) => {
+            if (!route.qiList) return;
+            route.qiList.forEach((station) => {
+              // 入力された文字列を駅名に含むかチェック（部分一致）
+              if (station.name.indexOf(query) !== -1) {
+                const row = document.createElement('tr');
+      
+                // 駅名
+                const tdStation = document.createElement('td');
+                tdStation.textContent = station.name;
+                row.appendChild(tdStation);
+      
+                // 駅名（カナ）
+                const tdKana = document.createElement('td');
+                tdKana.textContent = station.kana;
+                row.appendChild(tdKana);
+      
+                // 駅名wikiリンク
+                const tdStationLink = document.createElement('td');
+                const aStation = document.createElement('a');
+                aStation.href = station.url;
+                aStation.target = '_blank';
+                aStation.textContent = 'wiki';
+                tdStationLink.appendChild(aStation);
+                row.appendChild(tdStationLink);
+      
+                // 路線名
+                const tdRoute = document.createElement('td');
+                tdRoute.textContent = route.name;
+                row.appendChild(tdRoute);
+      
+                // 路線名（カナ）
+                const tdRouteKana = document.createElement('td');
+                tdRouteKana.textContent = route.kana;
+                row.appendChild(tdRouteKana);
+      
+                // 路線wikiリンク
+                const tdRouteLink = document.createElement('td');
+                const aRoute = document.createElement('a');
+                aRoute.href = route.url;
+                aRoute.target = '_blank';
+                aRoute.textContent = 'wiki';
+                tdRouteLink.appendChild(aRoute);
+                row.appendChild(tdRouteLink);
+      
+                resultsBody.appendChild(row);
+              }
+            });
+          });
+        }
+      
+        // 検索ボタンがクリックされたときに検索を実行
+        document.getElementById('searchButton').addEventListener('click', searchStations);
+      
+        // Enter キーでも検索を実行できるように
+        document.getElementById('searchBox').addEventListener('keyup', (e) => {
+          if (e.key === 'Enter') searchStations();
+        });
+      </script>
+</body> </html>
+
+
+
